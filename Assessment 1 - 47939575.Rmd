@@ -1,0 +1,585 @@
+---
+title: "Assesssment 1 - COVID-19 impact on digital learning"
+author: "Muhammad Pasha Arrighi Effendi - 47939575"
+output: word_document
+date: "2024-03-25"
+---
+
+<div style="text-align: justify;">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Installing Packages, warning=FALSE, include=FALSE}
+## 1. Data Cleaning and Wrangling  
+# Import Necessary Packages
+library(tidyverse)
+library(readr)
+```
+
+```{r Import CSV Files, warning=FALSE, include=FALSE}
+# Data Import
+test_results1=read_csv(file="1000.csv") 
+test_results2=read_csv(file="1039.csv")
+test_results3=read_csv(file="1044.csv")
+test_results4=read_csv(file="1052.csv")
+test_results5=read_csv(file="1131.csv")
+districts=read_csv(file="districts_info.csv")
+products=read_csv(file="products_info.csv")
+```
+## 1. Data Cleaning and Wrangling
+```{r Cleaning districts_info, warning=FALSE, results='hide'}
+# I am going to clean the districts_info, products_info, and engangement_data respectively.
+# districts_info Tibble Info
+str(districts) #show summary data of tibble
+head(districts) #show the first 6 entries
+
+# Since there are still many errors, I am going to clean the data column by column
+# Start with state column
+# To see unique in state column
+unique(districts$state)
+
+# Based on the unique, I see some errors. Here are the errors that I want to fix:
+# "uTtah" -> "Utah"
+# "UTAH" -> "Utah"
+# "Utaah" -> "Utah"
+# "ConnectiCUT" -> "Connecticut"
+# "District Of Columbia" -> "Washington"
+# "New Y0rk" -> "New York"
+# "NY City" -> "New York"
+# "Ohi0" -> "Ohio"
+# So, I am going to fix those errors using this code:
+districts$state[districts$state=="uTtah"]="Utah"
+districts$state[districts$state=="UTAH"]="Utah"
+districts$state[districts$state=="Utaah"]="Utah"
+districts$state[districts$state=="ConnectiCUT"]="Connecticut"
+districts$state[districts$state=="District Of Columbia"]="Washington"
+districts$state[districts$state=="New Y0rk"]="New York"
+districts$state[districts$state=="NY City"]="New York"
+districts$state[districts$state=="Ohi0"]="Ohio"
+
+# After cleaning process, I want to check whether the data has been changed or not by seeing unique values in state column once again
+unique(districts$state)
+
+# Next, locale column
+# To see unique in locale column
+unique(districts$locale)
+
+# Based on the unique, I see some errors. Here are the errors that I want to fix:
+# "Cit" -> "City"
+# "C1ty" -> "City"
+# "Sub" -> "Sub"
+# So I am going to fix those errors by using this code
+districts$locale[districts$locale=="Cit"]="City"
+districts$locale[districts$locale=="C1ty"]="City"
+districts$locale[districts$locale=="Sub"]="Suburb"
+
+# After cleaning process, I want to check whether the data has been changed or not by seeing unique values in locale column once again
+unique(districts$locale)
+
+# Now since the first two columns have been cleaned, I am going to move on to the next four columns which are pct_black/hispanic, pct_free/reduced, county_connections_ratio, and pp_total_raw. I am going to clean the data in these 4 columns all at once because they have the similar problems
+# First step is the same as earlier which is to see unique in pct_black/hispanic, pct_free/reduced, county_connections_ratio, and pp_total_raw column
+unique(districts$"pct_black/hispanic")
+unique(districts$"pct_free/reduced")
+unique(districts$county_connections_ratio)
+unique(districts$pp_total_raw)
+
+# Based on the unique, I see some errors. Here are the errors that I want to fix:
+# "[0, 0.2[" -> "0-20"
+# "[0.2, 0.4[" -> "20-40"
+# "[0.4, 0.6[" -> "40-60"
+# "[0.6, 0.8[" -> "60-80"
+# "[0.8, 1[" -> "80-100"
+# [14000, 16000[" -> "14000-16000"
+# "[6000, 8000[" -> "6000-8000"
+# [10000, 12000[" -> "10000-12000"
+# "[8000, 10000[" -> "8000-10000"
+# "[12000, 14000[" -> "12000-14000"
+# "[16000, 18000[" -> "16000-18000"
+# "[20000, 22000[" -> "20000-22000"
+# "[18000, 20000[" -> "18000-20000"
+# "[22000, 24000[" -> "22000-24000"
+# "[4000, 6000["   -> "4000-6000"
+# "[32000, 34000[" -> "32000-34000"
+# I decided to not fix the values in county_connections_ratio column because the range is too wide (does not make sense). For example:
+# "[0.18, 1[" -> "18-100"
+# "[1, 2[" -> "100-200"
+# So I am not going to fix those values
+# To fix the format in pct_black/hispanic, pct_free/reduced, and pp_total_raw column, I am going to use this code:
+reformat_col <- function(pct) { # I am going to define a function first
+  out <- pct %>% 
+    str_split(",") %>% #This code is to split the values into two parts seperated by comma
+    map(str_remove, "\\[") %>% #To remove the square brackets
+    map(function(x) paste(as.numeric(x) * 100, collapse = "-")) %>% #To multiply each values with 100 then separate it with "-"
+    unlist() #To converts the results into a single vector value
+# After fixed the values format, Then I want to change the blank NA into "NA"
+# I use this code
+  out[out == "NA"] <- NA
+  out
+}
+
+# Now, since the function has been created, then I am going to clean the data and save the cleaned version of districts_info into tibble called district_1. I decided to make a new tibble beacuse I want to have an access to the uncleaned version of the data (just in case something happen) 
+district_1=districts %>%
+  mutate(across(starts_with("pct"), ~ reformat_col(.x)),#call previous function (only apply it to columns that start with "pct")
+         pp_total_raw = str_remove_all(pp_total_raw, "\\["), #this line remove "[" from values in pp_total_raw column
+         pp_total_raw = str_replace(pp_total_raw, ", ", "-")) #this line replace "," to "-" from values in pp_total_raw column
+
+# Now the format has been fixed. After fixing the format, Next I am going to Drop NaN value in column "state" and "locale" then save it into new tibble called district_2. I decided to make a new tibble beacuse I want to have an access to the uncleaned version of the data (just in case something happen) 
+# I made a decision to delete all the data that have NaN value ONLY in "state" and "locale" columns because the other four columns are not needed to perform visualization
+# To remove the NaN value I use this code
+# I made a function that filters out rows where the "state"  and "locale" column are not equal to 'NaN' 
+district_2 <- district_1 %>%
+  filter(!state %in% c('NaN') & !locale %in% c('NaN')) 
+
+# Finally, district_info tibble is already cleaned and has been saved into district_2 column for further use 
+```
+
+```{r Cleaning product_info, echo=TRUE, warning=FALSE, results='hide'}
+# The next step is to clean the product_info tibble
+# districts_info Tibble Info
+str(products) #show summary data of tibble
+head(products) #show the first 6 entries
+
+# Since there are still many errors, I am going to clean the data column by column
+# Start with URL and Product Name column
+# To see unique in URL and Product Name column
+unique(products$URL)
+unique(products$"Product Name")
+
+# Based on the unique value, I can see based on the assumption there are some duplicate data
+# For example,
+# 53399/Adobe Spark Page and 97209/Adobe Spark -> similar URL
+# 26248/Studio Code and 85975/Code.org -> similar URL
+# 33562/IXL Language and 75206/IXL -> similar URL
+# 69610/History for Kids and 33326/Ducksters -> similar URL
+# 45716/ClassDojo for Students and 47267/ClassDojo -> similar Name
+# 87841/Edpuzzle - Free (Basic Plan) and 35971/Edpuzzle -> similar Name
+# 87762/Grammarly for Chrome and 51340/Grammarly -> Grammarly for Chrome and Grammarly is basically the same"    
+# 35098/SafeYouTube and 75206/YouTube -> SafeYoutube are part of Youtube" 
+
+# In order to fix those problems, I am going to remove duplicate value based on its LP ID
+products <- products %>%
+  filter(!`LP ID` %in% c(53399, 26248, 33562, 69610, 45716, 87841, 87762,35098))
+
+# After fixing the duplicate data problems,  next I am going to fix the format of "Primary Essential Function" column by splitting the column into two seperate columns which are Main and Sub
+# Then, I am going to save the cleaned data into new tibble called products_1
+# This is the code that I use
+products_1=products %>%
+  separate("Primary Essential Function", c("main", "sub"),
+           sep = " - ", extra = "merge")
+
+# Based on the newly generated tibble, I noticed something wrong in "main" column
+# To see unique in "main" column of products_1 Tibble
+unique(products_1$"main")
+
+# I noticed that LC and CL have the same sub function therefore I am going to replace "CL" with "LC" to fix that problems
+# I use this code
+products_1=products_1 %>%
+  mutate(main = replace(main,main == "CL","LC"))
+
+# To see unique in products_1 Tibble once again
+unique(products_1$"main")
+
+# Lastly, I am going to fix typing error in "Sector(s)" column
+# To see unique values in Sector(s) column
+unique(products_1$"Sector(s)")
+
+# Based on the unique, I see some errors. Here are the errors that I want to fix:
+# "PreK-112" -> "PreK-12"
+# "PreK-122" -> "PreK-12"
+# "PPreK-122" -> "PreK-12"
+# "pre kindergarten to yr 12" -> "PreK-12"
+# "pre kindergarten to year 12" -> "PreK-12"
+# "PPreK-12" -> "PreK-12"
+# "PreK-12; Higher; Corporate" -> "PreK-12; Higher Ed; Corporate"
+# To clean the data I use this code
+products_2 <- products_1 %>% #I'm going to save the cleand data into new tibble called products_2
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "PreK-112", "PreK-12")) %>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "PreK-122", "PreK-12")) %>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "PPreK-122", "PreK-12")) %>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "pre kindergarten to yr 12", "PreK-12"))%>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "pre kindergarten to year 12", "PreK-12"))%>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "PPreK-12", "PreK-12"))%>%
+  mutate(`Sector(s)` = str_replace_all(`Sector(s)`, "PreK-12; Higher; Corporate", "PreK-12; Higher Ed; Corporate"))
+
+# To see unique values in "Sector(s)" column after cleaning 
+unique(products_2$"Sector(s)")
+
+# Now, the Districts_Info and Products_Info data have been cleaned and saved under the name of districts_2 and products_2
+```
+
+```{r Cleaning engagement data, echo=TRUE, warning=FALSE, results='hide'}
+# Then, the next step is to clean engagement data
+# Tibble Info of engagement data
+str(test_results1) #show summary data of tibble
+str(test_results2) #show summary data of tibble
+str(test_results3) #show summary data of tibble
+str(test_results4) #show summary data of tibble
+str(test_results5) #show summary data of tibble
+
+head(test_results1) #show the first 6 entries
+head(test_results2) #show the first 6 entries
+head(test_results3) #show the first 6 entries
+head(test_results4) #show the first 6 entries
+head(test_results5) #show the first 6 entries
+
+# I'm going to clean the data column by column
+# Firstly, "time" column
+# To see unique in "time" column
+unique(test_results1$time)
+unique(test_results2$time) 
+unique(test_results3$time) 
+unique(test_results4$time) 
+unique(test_results5$time) 
+
+# To check if there are any missing values or NAs in "time" column
+any(is.na(test_results1$time))
+any(is.na(test_results2$time)) 
+any(is.na(test_results3$time)) 
+any(is.na(test_results4$time)) 
+any(is.na(test_results5$time)) 
+
+# Since there is no null value, then the next step is to uniform the format of "time" column
+# I am going to uniform all the format into this "%d/%m/%y" to make it more understandable
+# In order to do that, I'm going to use lubridate package
+# To import lubridate
+library(lubridate) 
+
+# Convert date format for test_results1
+test_results1$time <- as.Date(test_results1$time, format="%d/%m/%y")
+test_results1$time <- format(test_results1$time, "%d-%m-%Y")
+
+# Convert date format for test_results2
+test_results2$time <- as.Date(test_results2$time, format="%d/%m/%y")
+test_results2$time <- format(test_results2$time, "%d-%m-%Y")
+
+# Convert date format for test_results3
+test_results3$time <- as.Date(test_results3$time, format="%d/%m/%y")
+test_results3$time <- format(test_results3$time, "%d-%m-%Y")
+
+# Convert date format for test_results4
+test_results4$time <- as.Date(test_results4$time, format="%d/%m/%y")
+test_results4$time <- format(test_results4$time, "%d-%m-%Y")
+
+# Convert date format for test_results5
+test_results5$time <- as.Date(test_results5$time, format="%d/%m/%y")
+test_results5$time <- format(test_results5$time, "%d-%m-%Y")
+
+# To see unique once again just to make sure wheather the format has been changed or not 
+unique(test_results1$time)
+unique(test_results2$time)
+unique(test_results3$time)
+unique(test_results4$time)
+unique(test_results5$time)
+
+# Based on the unique values in test_results1 tibble (district 1000), I noticed that there is a column that says "31-12-2010". I interpret this as a typing error therefore I am going to change it into "31-12-2020" in order to fix it.
+# This is the code that I use
+test_results1 <- test_results1 %>%
+  mutate(time = replace(time,time == "31-12-2010"
+                        ,"31-12-2020"))
+
+# To see the unique values once more
+unique(test_results1$time)
+
+# After fixing the date format, I am going to extract "month" from the "time" column then convert it into numeric for data visualization purposes
+# Extract month
+test_results1$month <- as.character(str_sub(test_results1$time,-7,-6))
+test_results2$month <- as.character(str_sub(test_results2$time,-7,-6))
+test_results3$month <- as.character(str_sub(test_results3$time,-7,-6))
+test_results4$month <- as.character(str_sub(test_results4$time,-7,-6))
+test_results5$month <- as.character(str_sub(test_results5$time,-7,-6))
+
+# After fixing the "time" column, now I am going to remove duplicates from "lp_id" column
+# Change the data type into characters first
+test_results1$lp_id <- as.character(test_results1$lp_id)
+test_results2$lp_id <- as.character(test_results2$lp_id)
+test_results3$lp_id <- as.character(test_results3$lp_id)
+test_results4$lp_id <- as.character(test_results4$lp_id)
+test_results5$lp_id <- as.character(test_results5$lp_id)
+# to remove duplicates
+# district 1000
+test_results1=test_results1 %>%
+  mutate(lp_id = replace(lp_id,lp_id == "53399","97209")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "45716","47267")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "26248","85975")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87841","35971")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87762","51340")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "33562","75206")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "35098","61292")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "69610","33326"))
+
+# district 1039
+test_results2=test_results2 %>%
+  mutate(lp_id = replace(lp_id,lp_id == "53399","97209")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "45716","47267")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "26248","85975")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87841","35971")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87762","51340")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "33562","75206")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "35098","61292")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "69610","33326"))
+
+# district 1044
+test_results3=test_results3 %>%
+  mutate(lp_id = replace(lp_id,lp_id == "53399","97209")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "45716","47267")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "26248","85975")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87841","35971")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87762","51340")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "33562","75206")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "35098","61292")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "69610","33326"))
+
+# district 1052
+test_results4=test_results4 %>%
+  mutate(lp_id = replace(lp_id,lp_id == "53399","97209")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "45716","47267")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "26248","85975")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87841","35971")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87762","51340")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "33562","75206")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "35098","61292")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "69610","33326"))
+
+# district 1131
+test_results5=test_results5 %>%
+  mutate(lp_id = replace(lp_id,lp_id == "53399","97209")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "45716","47267")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "26248","85975")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87841","35971")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "87762","51340")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "33562","75206")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "35098","61292")) %>%
+  mutate(lp_id = replace(lp_id,lp_id == "69610","33326"))
+
+# After removing the duplicates, next step is to remove 0 and NaN Value from the district table
+# I am going to remove the 0 and NaN Value district by district
+
+# District 1000
+# checks if any NA's exist
+anyNA(test_results1)
+sum(is.na(test_results1))
+colSums(is.na(test_results1))
+
+# To delete NA's I'm using this code
+test_results1 <- na.omit(test_results1)
+
+
+# District 1039
+# checks if any NA's exist
+anyNA(test_results2)
+sum(is.na(test_results2))
+colSums(is.na(test_results2))
+
+# To delete NA's I'm using this code
+test_results2 <- na.omit(test_results2)
+
+
+# District 1044
+# checks if any NA's exist
+anyNA(test_results3)
+sum(is.na(test_results3))
+colSums(is.na(test_results3))
+
+# To delete NA's I'm using this code
+test_results3 <- na.omit(test_results3)
+
+
+# District 1052
+# checks if any NA's exist
+anyNA(test_results4)
+sum(is.na(test_results4))
+colSums(is.na(test_results4))
+
+# To delete NA's I'm using this code
+test_results4 <- na.omit(test_results4)
+
+# District 1131
+# checks if any NA's exist
+anyNA(test_results5)
+sum(is.na(test_results5))
+colSums(is.na(test_results5))
+
+# To delete NA's I'm using this code
+test_results5 <- na.omit(test_results5)
+
+# After, deleting the NA's, Now I am going to delete double entry data using this code
+test_results1 <- distinct(test_results1)
+test_results2 <- distinct(test_results2)
+test_results3 <- distinct(test_results3)
+test_results4 <- distinct(test_results4)
+test_results5 <- distinct(test_results5)
+
+# Next, I am going to make a new column district_id to help me combine the data
+test_results1$district_id <- 1000
+test_results2$district_id <- 1039
+test_results3$district_id <- 1044
+test_results4$district_id <- 1052
+test_results5$district_id <- 1131
+```
+
+```{r Combining the cleaned data, warning=FALSE, results='hide'}
+# After the cleaning process, I am going to combine all the districts data that I already cleaned into 1 tibble called engagement_cleaned
+# In order to do that, I am going to use dplyr package
+# To import dplyr
+library(dplyr)
+# To combine all the tibbles
+engagement_cleaned <- bind_rows(test_results1, test_results2, test_results3, test_results4, test_results5)
+engagement_cleaned <- distinct(engagement_cleaned)
+
+# Combine the clean version of district and product info
+products_3 = products_2 %>% 
+  rename(lp_id=`LP ID`)   # to rename to this column
+
+districts_3=district_2 %>%
+  rename(pct_black_hispanic = `pct_black/hispanic`) #to rename to this column
+
+districts_3=districts_3 %>%
+  rename(pct_free_reduced=`pct_free/reduced`) #to rename to this column
+
+#change charcter in lp_id in products_info so we can combine with data district
+products_3$lp_id<- as.character(products_3$lp_id)
+D1000_1 <- left_join(products_3, test_results1, by = "lp_id")
+D1039_1 <- left_join(products_3, test_results2, by = "lp_id")
+D1044_1<- left_join(products_3, test_results3, by = "lp_id")
+D1052_1 <- left_join(products_3, test_results4, by = "lp_id")
+D1131_1 <- left_join(products_3, test_results5, by = "lp_id")
+engagement_cleaned_2 <- left_join(products_3, engagement_cleaned, by = "lp_id")
+
+# To remove na and nan
+engagement_cleaned_2 <- engagement_cleaned_2[complete.cases(engagement_cleaned_2$district_id), ]
+
+# To remove the unnecessary values
+D1000_2 <- select(D1000_1, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+D1039_2 <- select(D1039_1, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+D1044_2 <- select(D1044_1, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+D1052_2 <- select(D1052_1, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+D1131_2 <- select(D1131_1, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+engagement_cleaned_3 <- select(engagement_cleaned_2, -c(URL, `Provider/Company Name`, `Sector(s)`, `sub`,`time`))
+
+engagement_cleaned_3 = engagement_cleaned_3 %>% 
+  #rename to this column
+  rename(`Product_Name` = `Product Name`)
+```
+
+```{r saving the data, warning=FALSE, results='hide'}
+# to save engagement_cleaned_3 into csv files, I'm using this code
+write_csv(engagement_cleaned_3, "engagement_cleaned.csv")
+```
+  
+\newpage
+
+## 2. Data Visualisation
+1. Analyzing Digital Connectivity and Engagement in 2020
+```{r Analyzing Digital Connectivity and Engagement in 2020, echo=FALSE}
+# In order to understand the digital connectivity and engagement in 2020, I'm going to use this code:
+
+# Import ggplot
+library(ggplot2)
+
+# Import the cleaned data
+df <- read.csv("/Users/pashaarrighi/Documents/S2/Macquarie/Session 1 2024/Techniques in Business Analytics/Assesment 1/Assessment 1- Data and Template-20240325/Engagement Data/engagement_cleaned.csv")
+
+# Preparing the Month Column: The "month" column in our dataset needed to be in a format that is intuitive for visualization. If it was numeric (e.g., 1 for January, 2 for February), I converted it into a factor and labeled each level with the corresponding month name to make our plot more readable.
+
+df$month <- factor(df$month, levels = 1:12, labels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+
+# Aggregating the Data: Since our dataset might have contained multiple observations per month, and I was interested in plotting an average engagement index for each month, I aggregated the data. By grouping the data by month and calculating the average engagement index for each group, I could get a clearer picture of the overall trends.
+
+df_summary <- df %>%
+  group_by(month) %>%
+  summarize(average_engagement_index = mean(engagement_index, na.rm = TRUE))
+
+# Creating the Plot: With the data prepared, I was ready to create the plot. I used ggplot() to generate a line plot that shows the average engagement index for each month. I added points to each month's average to emphasize the data points. I also made sure that the months are connected in order by specifying group=1 in geom_line().
+
+ggplot(data = df_summary, aes(x = month, y = average_engagement_index)) + 
+  geom_line(group=1) +  # This ensures the line connects points in the order they appear
+  geom_point() +  # This adds a point for each month's average
+  labs(title = "Digital Engagement Over Months in 2020", x = "Month", y = "Average Engagement Index")
+```
+
+2. Relationship Between Student Engagement and Demographics
+```{r Relationship Between Student Engagement and Demographics, echo=FALSE}
+# To understand how student engagement varies across different districts, I focused on the district_id column of our dataset, which I hypothesized might represent a variety of geographical or demographic differences. Here's what I did to visualize this relationship using R:
+
+# Preparing the Data: To get a clear view of the engagement for each district, I grouped the data by district_id and then calculated the average engagement index for each one. This step is crucial because it condenses the data into a meaningful metric that I can compare across districts.
+
+df_summary <- df %>%
+  group_by(district_id) %>%
+  summarize(average_engagement_index = mean(engagement_index, na.rm = TRUE))
+
+# Creating the Visualization: With the summarized data ready, I created a bar plot. Each bar represents a district, and the height reflects the average engagement index of that district.
+
+ggplot(data = df_summary, aes(x = factor(district_id), y = average_engagement_index, fill = factor(district_id))) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Student Engagement by District", x = "District ID", y = "Average Engagement Index")
+
+# Adjusting the Plot for Readability: Recognizing that there might be many districts and hence a crowded x-axis, I rotated the x-axis labels to be vertical. This adjustment ensures that each district ID is visible and legible.
+```
+3. The relationship between engagement and the percentage of access (pct_access)
+```{r The relationship between engagement and the percentage of access (pct_access), echo=FALSE, message=FALSE}
+# To gain more insights from our dataset, I decided to investigate whether there is a relationship between how often students access digital learning tools (pct_access) and their engagement levels (engagement_index). Here's how I approached creating a visualization for this analysis:
+
+# Creating a Scatter Plot: To visualize the relationship, I created a scatter plot with pct_access on the x-axis and engagement_index on the y-axis. I chose a scatter plot because it's an excellent way to observe patterns between two continuous variables.
+ggplot(data = df, aes(x = pct_access, y = engagement_index)) +
+  geom_jitter(alpha = 0.2, width = 0.1, height = 0) +  # Adding jitter to points
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +  # Add a linear trend line without the confidence interval
+  labs(title = "Scatter Plot of Digital Tool Access vs Engagement",
+       x = "Percentage of Digital Tool Access (pct_access)",
+       y = "Engagement Index") +
+  theme_minimal()  # Apply a minimal theme for a clean look
+
+# The resulted visualization clearly shows the relationship between digital access and student engagement. This approach gave me an initial understanding of how these two important variables might be related within our digital learning dataset.
+```
+4. Engagement Index by District
+```{r Engagement Index by District, echo=FALSE}
+
+# With the hypothesis that engagement may vary by district, I thought a boxplot would effectively compare the spread and median of engagement scores across districts.
+# Creating the Visualization: I used geom_boxplot() in ggplot to create a boxplot for each district_id.
+
+ggplot(data = df, aes(x = factor(district_id), y = engagement_index)) +
+  geom_boxplot() +
+  labs(title = "Engagement Index by District",
+       x = "District ID",
+       y = "Engagement Index") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) # Here, I rotated the x-axis labels for better visibility.
+```
+
+\newpage
+
+## 3. Findings  
+1. Analyzing Digital Connectivity and Engagement in 2020
+
+  The graph shows the average digital engagement index for each month throughout the year 2020. It seems that engagement started off at a moderate level in January, rose to peak around March, and then experienced a sharp drop in April. From there, it continued at a lower level in May, followed by a rise in June, a significant dip in July, a peak in August, and then a decline towards the end of the year with some fluctuations. 
+
+The peaks might correspond to times when digital learning tools are heavily utilized, like the beginning of a school term or during exam preparations. The troughs, especially the sharp one in July, might indicate periods such as summer break in the Northern Hemisphere when schools are typically closed. 
+
+The patterns observed might be influenced by the school calendar, specific events like holidays, or external factors such as policy changes or other events in 2020.
+
+2. Relationship Between Student Engagement and Demographics
+
+  The bar chart shows the average engagement index for different districts, identified by their district IDs. Each bar color corresponds to a different district.
+
+  The chart reveals that there’s a notable difference in the average engagement index between districts. District 1044 has the highest average engagement, significantly more than the others. Meanwhile, District 1131 has the lowest average engagement. This variation suggests that student engagement with digital learning varies by district, which could be due to many factors like resource availability, policy, socioeconomic status, or educational strategies.
+
+  This kind of visualization helps quickly identify which districts are excelling in engagement and which may need more support or investigation into their lower engagement levels.
+
+3. The relationship between engagement and the percentage of access (pct_access)
+
+  The scatter plot displays the relationship between the percentage of digital tool access (`pct_access`) on the x-axis and the engagement index (`engagement_index`) on the y-axis. A trend line is added to indicate the general direction of the relationship.
+
+  The trend line is upward sloping, showing a positive correlation between access to digital tools and engagement levels—generally, as access increases, so does engagement. The plot also shows a wide spread of engagement levels at higher percentages of access, indicating that other factors may also influence engagement beyond access alone. The density of points is greater at the lower access levels, suggesting that more data points (or cases) have lower access percentages.
+
+4. Engagement Index by District
+
+  This graph is a boxplot that shows the distribution of engagement indices across several districts, identified by district IDs. Each vertical line represents one district, with the dots showing the spread of engagement index values within that district. 
+
+The main observations from this graph are:
+
+- The range of engagement indices varies widely from district to district.
+- Some districts have outliers that are significantly higher than most of their other data points.
+- District 1044 has the largest range of engagement, indicating more variability within that district.
+- District 1131 has the narrowest spread, suggesting more consistency in engagement among its students.
+
+  This visualization provides a quick comparative view of how engaged students are in different districts. It can help identify which districts might be over- or under-performing in terms of student engagement with digital learning platforms.
